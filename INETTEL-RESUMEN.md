@@ -65,7 +65,7 @@ ya hace bien y añadiendo **3 plugins propios** para lo que le falta. Resultado:
 - **Custom Fields** y **Choice Sets** sembrados (EOL/EOS, dBm ópticos, BGP, drift, coordenadas…).
 - Todo construido como **plugins** (la API estable de NetBox) → cambios ágiles sin tocar el core.
 
-### Operaciones / ITSM (plugin `netbox_inettel_itsm`) — 5 modelos
+### Operaciones / ITSM (plugin `netbox_inettel_itsm`) — 8 modelos
 | Modelo | Para qué |
 |---|---|
 | **Incident** | Incidencias P1–P4 con ciclo de vida |
@@ -73,10 +73,13 @@ ya hace bien y añadiendo **3 plugins propios** para lo que le falta. Resultado:
 | **MaintenanceWindow** | Mantenimientos (impacto, ventana, ligado a un cambio) |
 | **SLA** | Niveles de servicio (gold/silver/bronze, tiempos de respuesta) |
 | **ServiceRequest** | Peticiones de servicio (acceso/provisión…) con flujo de aprobación |
+| **Postmortem** | Análisis post-incidente (causa raíz, resolución, acciones), ligado a su Incident |
+| **Runbook** | Procedimientos documentados (base de conocimiento), por categoría/rol |
+| **OnCallSchedule + OnCallShift** | Rotaciones de guardia y turnos (primary/secondary/escalation) |
 
-Cada modelo tiene UI completa, **API REST**, **búsqueda global**, y respeta permisos por tenant.
-Además, **pestañas en Device y Site** muestran sus incidencias/cambios/mantenimientos relacionados,
-con botón "crear" pre-rellenado.
+Cada modelo tiene UI completa, **API REST**, **GraphQL**, **búsqueda global**, y respeta permisos por tenant.
+Además, **pestañas en Device, Site e Incident** muestran objetos relacionados (incidencias/cambios/
+mantenimientos en Device/Site; postmortems en Incident), con botón "crear" pre-rellenado.
 
 ### Despliegue por empresa (producción) — carpeta `inettel-netbox/deploy/`
 - **Imagen Docker** con los 3 plugins horneados (sobre `netboxcommunity/netbox`).
@@ -109,10 +112,10 @@ con botón "crear" pre-rellenado.
 
 ## 5. Lo que FALTA ⏳ (todo opcional a partir de aquí)
 
-### ITSM (ampliar, mismo patrón ya rodado)
-- [ ] **Postmortem** ligado a una incidencia (causa raíz + acciones) — cierra el ciclo de incidencias.
-- [ ] **On-call / escalado** (turnos + reglas de aviso).
-- [ ] **Runbooks** (procedimientos documentados).
+### ITSM
+- [x] **On-call / escalado** (rotaciones + turnos) — hecho.
+- [x] **Runbooks** (procedimientos documentados) — hecho.
+- *(Todos los modelos ITSM del plan están completos.)*
 
 ### Topología (extras)
 - [ ] Vista **híbrida** físico+VLAN superpuesta.
@@ -124,8 +127,8 @@ con botón "crear" pre-rellenado.
 - [ ] Estrategia de **backups** por empresa y actualización de imagen por oleadas (documentada, falta ejecutar).
 
 ### Fundación (menores)
-- [ ] Sembrar **Manufacturer / DeviceRole / Platform** base en el bootstrap.
-- [ ] (Opcional) **GraphQL** para los modelos de los plugins.
+- [x] **Manufacturer / DeviceRole / Platform** base en el bootstrap — hecho (7/8/7), idempotente.
+- [x] **GraphQL** para los modelos ITSM — hecho (los 6 modelos), schema verificado.
 
 ### Integraciones externas (cuando toque)
 - [ ] Conectar métricas/logs (Grafana/Loki/Prometheus) y feeds CVE vía Event Rules + Webhooks.
