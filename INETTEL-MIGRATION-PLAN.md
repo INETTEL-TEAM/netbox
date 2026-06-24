@@ -4,9 +4,9 @@
 >
 > - **Autor:** Anna Sabater + Claude (arquitecto de soluciones / NetBox)
 > - **Fecha:** 2026-06-22
-> - **Estado global:** Análisis ✅ · Decisiones clave ✅ · Entorno local NetBox ✅ · Fase 0 Fundación ✅ · Fase 1 esqueleto plugin geo ✅ · Construcción ⏳ (en curso)
+> - **Estado global:** Análisis ✅ · Decisiones ✅ · Entorno local ✅ · Fase 0 Fundación ✅ · Fase 1 Geo ✅ · Fase 2 Topología (grafo+path+SPOF+what-if+VLAN+filtros) ✅ · Fase 3 ITSM `Incident`+`ChangeRequest`+`MaintenanceWindow`+`SLA` ✅ +`ServiceRequest` · Pilar 2 scoping por tenant ✅ · Fase 0 deploy por empresa ✅ · Construcción ⏳ (en curso)
 > - **Ubicación del repo NetBox de trabajo:** `/Users/annasabater/netbox` (NetBox 4.6.3, Django 6, Python 3.12)
-> - **Plugins inettel:** `/Users/annasabater/inettel-netbox/` (workspace de paquetes; `netbox_inettel_geo` instalado en editable).
+> - **Plugins inettel:** `/Users/annasabater/inettel-netbox/` (workspace de paquetes; `netbox_inettel_geo` y `netbox_inettel_topology` instalados en editable).
 
 ---
 
@@ -210,25 +210,48 @@ Syslog (Loki/LogQL), métricas (Prometheus/Mimir/Grafana — ya en su stack), CV
   - [ ] `Manufacturer` / `DeviceRole` / `Platform` base. *(pendiente — ampliar el bootstrap)*
   - [x] **Custom Fields** (`extended_fields`: EOL/EOS, drift_status, source_system, dBm Tx/Rx, BGP origin ASN, DNS). **8 campos** sobre Device/Site/Interface/Prefix/IPAddress.
   - [x] **Choice Sets** = `master_catalogs` (semilla `inettel_drift_status`). **1 choice set**.
-- [ ] **Imagen Docker por empresa** (NetBox + plugins horneados) + **script de aprovisionamiento** por empresa (subdominio, BD, Redis, secrets, nginx, TLS) adaptando `provision.sh`.
-- [ ] Definir estrategia de **versionado/actualización** de la imagen para N instancias.
+- [x] **Kit de despliegue por empresa** en `/Users/annasabater/inettel-netbox/deploy/`: `Dockerfile` (`netboxcommunity/netbox:v4.6-5.0.1` + los 3 plugins horneados), `docker-compose.yml` (stack aislado netbox+worker+postgres+redis, interpolado por `.env`), `provision.sh <slug> [empresa] [dominio] [puerto]` (genera secretos → up → migrate → `inettel_bootstrap` → crea Tenant → imprime URL/credenciales) y `deprovision.sh` (`--purge`).
+- [x] **Build + smoke test REAL ejecutado** ✓: imagen `inettel-netbox:latest` (1.3 GB) construida; `provision.sh acme … 8081` levantó el stack (4 servicios *healthy*), aplicó migraciones, sembró fundación y creó el Tenant; rutas de plugins responden 302 y `settings.PLUGINS` = los 3 plugins. **Aprendizajes:** (1) el tag base real es `v4.6-5.0.1` (no existía mi `v4.6-3.4.0`); (2) la imagen 5.x **usa Python 3.14 y `uv`** (sin `pip` en el venv) → instalar con `uv pip install --python /opt/netbox/venv/bin/python …`.
+- [x] **Estrategia de versionado**: misma imagen `inettel-netbox:<tag>` para todas las instancias; `NETBOX_VARIANT` fija la base 4.6; roll-forward por oleadas + backup de volumen `postgres` por empresa (documentado en `deploy/README.md`).
+- [ ] (Prod real) Reverse-proxy (nginx/Traefik) con TLS por subdominio + secretos en gestor (Vault/SOPS) en vez de `.env`.
 
 ### Fase 1 — Geo + DCIM/IPAM visual (pilares 1 y 3 base)
 - [x] Esqueleto plugin `netbox_inettel_geo` (`PluginConfig`, vista `GeoDashboardView`, navegación, template). Instalado (`pip install -e`) + activado en `PLUGINS`. Dashboard en **Plugins → inettel Geo** (`/plugins/inettel-geo/`), render 200 verificado.
-- [ ] Vista de **mapa drill-down** (isla MapLibre) sobre `Region`→`Site`, con estado agregado por nivel (conteo de sites/devices, salud). *(v0.2 — siguiente)*
-- [ ] Validar **rack-elevation** y **cable trace** nativos cubren la exploración visual 2D del pilar 3.
-- [ ] Import masivo de devices/racks/IPAM por REST o script (datos demo).
+- [x] Vista de **mapa drill-down** (isla MapLibre) sobre `Region`→`Site` (v0.2). Centroides de región en custom fields `inettel_latitude/longitude` (sembrados en el bootstrap); endpoint JSON `/plugins/inettel-geo/data/` sirve el árbol nivel a nivel con conteo agregado de sites/devices; mapa con breadcrumb + zoom in/out. Verificado: Mundo→Europa→España/Portugal.
+- [x] **Mapa "vivo" — salud por incidentes** (v0.3): cada nodo (región/site) se anota con la peor severidad de **incidentes activos** (site directo o vía `device.site`); el marcador se recolorea por severidad + etiqueta `⚠N`, y la salud **se propaga hacia arriba** por el árbol de regiones. `views._site_health_map()` con import ITSM protegido (degrada si no está). Verificado: BCN-DC1 y Europa → ⚠2 P1 (rojo). *Cierra el pilar 1: "estado de los activos en cada nivel".*
+
+### Pilar 2 — Multi-tenancy (scoping por tenant dentro de la instancia)
+- [x] **Endpoints de plugin permission-aware**: geo (`GeoDataView`/`_site_health_map`) y topología (`build_graph`/`vlan_payload`/`_incident_annotations` + path/spof/whatif) aplican `.restrict(user, 'view')` → respetan ObjectPermissions de NetBox.
+- [x] **Comando `inettel_demo_tenancy`** (idempotente): crea tenants **Acme** (BCN+MAD) y **Globex** (LIS), asigna `site.tenant`/`device.tenant`, y crea usuarios no-superuser `acme`/`globex` con **ObjectPermissions restringidos por tenant** (Site/Device por `tenant__slug`; Incident por `site|device.site → tenant`; Change/Maintenance por `site.tenant`).
+- [x] **Verificado (aislamiento real en una instancia)**: admin ve los 3 sites/73 nodos; **acme** solo BCN+MAD/14 nodos; **globex** solo LIS/7 nodos — en mapa **y** topología. Complementa la decisión "1 instancia por empresa" (aislamiento duro) con scoping de sub-clientes dentro de cada instancia.
+- [ ] (Opcional) Aplicar el mismo `.restrict()` a futuras vistas custom; constraints por `TenantGroup`; middleware para fijar tenant activo del usuario.
+- [x] **Rack-elevation nativa con datos** (Pilar 3): comando `inettel_demo_racks` crea 1 rack/site (`<site>-R1`, tenant heredado del site) y coloca los 7 devices con `position`/`face=front`. Verificado: elevación SVG (`/api/dcim/racks/<pk>/elevation/?render=svg`) renderiza los devices; ficha de rack 200; scoping por tenant (admin 3 racks · acme 2 · globex 1; rack de otro tenant → 404). **Requirió `collectstatic`** (el render SVG lee `STATIC_ROOT/rack_elevation.css` del disco). Cable-trace nativo disponible sobre los cables sembrados.
+- [x] **Datos demo multi-site**: comando `inettel_demo_topology` (BCN-DC1) + `inettel_demo_sites` (MAD-DC1 Madrid, LIS-POP1 Lisboa) — topología de 7 devices/site con nombres prefijados (componentes separados), VLANs e **incidentes de severidad variada** para lucir el mapa: BCN rojo (P1) · MAD naranja (P2) · LIS azul (P4). Idempotentes. Verificado: salud por site/región y filtro `?site=` aísla 7/7.
 
 ### Fase 2 — Topología (diferenciador)
-- [ ] Plugin `netbox_inettel_topology`: isla **React Flow** + endpoints que construyen el grafo desde NetBox.
-- [ ] **Path-tracer** (A→B) y **what-if/SPOF** con `networkx` (sin Neo4j).
-- [ ] Vistas: lógica, VLAN, híbrida.
+- [x] Plugin `netbox_inettel_topology` (v0.1): grafo lógico **Cytoscape.js** (CDN, sin build step; *desviación justificada* de React Flow) + endpoints que construyen el grafo en vivo desde `dcim.CableTermination` (cachea `_device`), **sin Neo4j**. Instalado editable (trae `networkx`), activo en `PLUGINS`. Página en **Plugins → inettel Topology** (`/plugins/inettel-topology/`).
+- [x] **Path-tracer** (A→B, `nx.shortest_path`) y **SPOF** (articulación + bridges, `nx.articulation_points`/`nx.bridges`). Endpoints `graph/`, `path/`, `spof/`. Verificado con datos demo: SPOF devices = core1/dist1/dist2; ruta acc1→acc3 = acc1→dist1→dist2→acc3 (3 hops).
+- [x] **Seeder de demo** `python manage.py inettel_demo_topology` (idempotente): site `BCN-DC1` en región Barcelona (con coords → aparece también en el mapa geo) + 7 devices + 7 cables con SPOFs evidentes.
+- [x] **What-if** (v0.2): marcar nodos como caídos (clic) y simular → reporta devices *severed* del fabric principal + nº de componentes resultantes (`nx.connected_components`). Endpoint `whatif/?down=`. Verificado: caer core1 aísla edge1; caer dist1 aísla acc1/acc2.
+- [x] **Vista por VLAN** (v0.2): grafo de membresía L2 device↔VLAN (untagged/tagged), toggle Physical/VLAN. Seeder ampliado con 3 VLANs (servers/mgmt/users). Verificado: 7 devices + 3 VLAN nodes.
+- [x] **Filtros por site/tenant en la UI** (v0.2): selector de site (solo sites con devices); endpoints aceptan `?site=`/`?tenant=`. Verificado.
+- [x] **Topología ↔ ITSM** (v0.3): los nodos device con **incidentes activos** se resaltan con anillo de color = peor severidad (P1 rojo / P2 naranja…) + etiqueta `⚠N`; contador en las stats. `graph.py._incident_annotations()` consulta el plugin ITSM con import protegido (degrada si no está); excluye incidentes resueltos/cerrados. Verificado: core1 (P1) y dist1 (P2) marcados, acc1 (resuelto) no. *Conecta Fase 2 ↔ Fase 3 en una sola pantalla.*
+- [x] **Pestaña Topology en el Site** (cohesión): `tabs.py` registra `SiteTopologyView` (`ViewTab`, `hide_if_empty`) en `dcim.Site` → embebe el grafo Cytoscape **filtrado al site** (anillos de incidente + botón SPOF) y enlace "Open full topology" que **pre-filtra** la página completa (lee `?site=`). Registrado en `PluginConfig.ready()`. Verificado: tab 200, scoping (acme→200 en su site, globex→404).
+- [ ] Vista híbrida (físico+VLAN superpuesto); what-if multi-nodo desde UI con persistencia de escenario; export del grafo (PNG/JSON).
 
-### Fase 3 — ITSM/Operaciones (lo más grande)
-- [ ] Plugin `netbox_inettel_itsm`: modelos RFC/CAB (+ aprobaciones, change windows), peticiones (state machine), SLA/tiers, incidencias (P1–P4), on-call/escalado, mantenimientos, runbooks, postmortems.
+### Fase 3 — ITSM/Operaciones (lo más grande) — *en curso*
+- [x] Plugin `netbox_inettel_itsm` (v0.1) + **modelo `Incident`** (P1–P4 + ciclo de vida) como `NetBoxModel` con superficie completa: model, choices, filterset (con `_id`), forms (model/filter/bulk-edit/import), table (ChoiceFieldColumn coloreado), views (list/detail/add/edit/delete/bulk), template de detalle, **REST API** (serializer/viewset/`NetBoxRouter`), **búsqueda global** (SearchIndex), navegación, migración generada por Django + aplicada, y tests (3 OK). Verificado: UI list/detail/add/import 200, API CRUD/filtros, search indexa. Permisos en servidor (ObjectPermissions) por defecto → cierra el gap RBAC de inettel.
+- [x] **ChangeRequest (RFC/CAB)** (v0.2): `NetBoxModel` con type (normal/standard/emergency), risk (low/med/high), status (draft→…→implemented/rejected/…), site/tenant, requester/approver y **ventana de cambio** (`scheduled_start/end` con validación `clean()`). Superficie completa (filterset/forms/table/views/template/REST API/search/nav) + migración 0002 + tests (7 OK total). Verificado UI/API/filtros/search. RFC demo sembrada (Upgrade core1 firmware, scheduled, ventana +1d).
+- [x] **MaintenanceWindow** (v0.3): ventanas de mantenimiento (status, impacto, site, **FK a ChangeRequest** → `maintenance_windows`, ventana start/end con validación). Superficie completa + API + search + nav. Migración 0003.
+- [x] **SLA** (v0.3): niveles gold/silver/bronze con objetivos response/resolution (min), FK tenant. Superficie completa + API + search + nav. Migración 0003. Tests totales: **12 OK**. Verificado UI/API/filtros/search; demo: mantenimiento ligado a la RFC + SLA "Gold 24x7".
+- [x] **Integración ITSM ↔ infraestructura** (v0.4): pestañas (`ViewTab` + `ObjectChildrenView`) en modelos del core — **Device** → tab *Incidents*; **Site** → tabs *Incidents / Change Requests / Maintenance*. Cada tab muestra los objetos ITSM relacionados con badge de conteo y **botón "Add" prefilado** (p. ej. `incident_add?device=<pk>&site=<pk>`). Registradas vía `tabs.py` importado en `PluginConfig.ready()` (antes de construir el URLconf de dcim). Verificado: tabs 200, badge, prefill y enlaces visibles en las fichas. *Esto es el "pegamento" que une los 4 pilares.*
+- [x] **ServiceRequest (peticiones)** (v0.4): `NetBoxModel` con type (access/provisioning/information/change/other), priority (low/normal/high/urgent), status (new→approved→in_progress→fulfilled/rejected/cancelled), tenant/site, requester/assignee. Superficie completa + REST API (`/api/plugins/inettel-itsm/service-requests/`) + search + nav. Migración 0004. Tests totales: **15 OK**. Verificado UI/API/filtros/search. Completa el trío ITIL **Incident/Change/Request**.
+- [ ] Resto de modelos del plugin: on-call/escalado, runbooks, postmortems.
 - [ ] Scripts: Custom Scripts + JobRunner; gating `requires_rfc`.
 - [ ] CVE/compliance como modelos de plugin; feeds externos.
 - [ ] Event Rules + Webhooks hacia PagerDuty/Slack/Grafana.
+
+> Notas de entorno (Fase 3): el rol Postgres `netbox` recibió `CREATEDB` (necesario para tests). Los plugins se añadieron también a `configuration_testing.py` (`PLUGINS`). La config principal incluye además `netbox_inettel_engine` (trabajo en paralelo, no cubierto por este plan).
 
 ### Fase 4 — OSP + Reports + Audit
 - [ ] Plugin `netbox_inettel_osp` (hilos/tubos/empalmes/puntos técnicos/rutas).

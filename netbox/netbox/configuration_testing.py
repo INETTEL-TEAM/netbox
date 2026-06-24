@@ -18,6 +18,9 @@ DATABASES = {
 
 PLUGINS = [
     'netbox.tests.dummy_plugin',
+    'netbox_inettel_geo',
+    'netbox_inettel_topology',
+    'netbox_inettel_itsm',
 ]
 
 RQ = {
