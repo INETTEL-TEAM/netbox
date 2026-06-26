@@ -94,8 +94,9 @@ mantenimientos en Device/Site; postmortems en Incident), con botón "crear" pre-
   `inettel_bootstrap`, `inettel_demo_topology`, `inettel_demo_sites`, `inettel_demo_racks`, `inettel_demo_tenancy`.
 
 ### Calidad
-- **589 tests en verde** + ruff limpio en los **3 plugins** (todos con tests). Cobertura completa al estándar NetBox `add-model` (los 4 tipos de test):
-  - ITSM: `test_models.py` (lógica/validaciones/gating) · `test_api.py` (REST CRUD/bulk/brief/**GraphQL** de los 10 modelos, con baseline de queries) · `test_filtersets.py` (filtros choice/FK/búsqueda) · `test_views.py` (UI: get/detail/changelog/create/edit/delete/list/bulk import-edit-delete).
+- **630 tests en verde** + ruff limpio en los **3 plugins** (todos con tests). Cobertura completa al estándar NetBox `add-model` (los 4 tipos de test):
+  - ITSM: `test_models.py` (lógica/validaciones/gating) · `test_api.py` (REST CRUD/bulk/brief/**GraphQL** de los 10 modelos, con baseline de queries) · `test_filtersets.py` (mixin estándar `ChangeLoggedFilterSetTests`: **`test_missing_filters` exige un filtro por cada campo del modelo** + id/created/last_updated, más asserts de choice/FK/búsqueda) · `test_views.py` (UI: get/detail/changelog/create/edit/delete/list/bulk import-edit-delete).
+  - Filtersets **exhaustivos**: todos los campos filtrables (escalares + FKs `*_id`, incluido `device_role_id` como `TreeNodeMultipleChoiceFilter`).
   - Topología: `test_graph.py` (build_graph, path-trace, SPOF, what-if, VLAN, híbrido, anillos de incidente).
   - Geo: `test_views.py` (dashboard, mapa, endpoint drill-down con agregación de subtree, breadcrumb, salud por incidentes y scoping por permisos).
 - **Auditoría end-to-end ejecutada**: 90 flujos reales verificados vía HTTP con datos de demo (UI list/add/import/detail + API + GraphQL de los 10 modelos ITSM, geo dashboard/map/data, topología graph/vlan/hybrid/spof/whatif, las pestañas en Device/Site/Incident/Schedule y todos los enlaces de menú) → **0 fallos**. Sin migraciones pendientes; `manage.py check` OK.
@@ -124,11 +125,13 @@ mantenimientos en Device/Site; postmortems en Incident), con botón "crear" pre-
 - *(Todos los modelos ITSM del plan están completos.)*
 
 ### Topología (extras)
-- [ ] Vista **híbrida** físico+VLAN superpuesta.
-- [ ] **Exportar** el grafo (PNG/JSON).
+- [x] Vista **híbrida** físico+VLAN superpuesta — hecho (`?mode=hybrid`).
+- [x] **Exportar** el grafo (PNG/JSON) — hecho (botones en la barra; PNG vía `cy.png()`, JSON del payload).
 
 ### Producción "de verdad"
-- [ ] **Reverse-proxy** (nginx/Traefik) con **TLS por subdominio** (`empresa.inettel.com`).
+- [x] **Reverse-proxy** (Traefik) con **TLS por subdominio** (`empresa.inettel.com`) — hecho:
+  edge compartido (`deploy/proxy/`) + override por empresa + **`PROXY=1 ./provision.sh`** (un flag:
+  engancha el override, crea la red `inettel-edge` y omite el puerto de host; Let's Encrypt automático).
 - [ ] Secretos en gestor (**Vault/SOPS**) en vez de ficheros `.env`.
 - [ ] Estrategia de **backups** por empresa y actualización de imagen por oleadas (documentada, falta ejecutar).
 
