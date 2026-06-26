@@ -94,7 +94,11 @@ mantenimientos en Device/Site; postmortems en Incident), con botón "crear" pre-
   `inettel_bootstrap`, `inettel_demo_topology`, `inettel_demo_sites`, `inettel_demo_racks`, `inettel_demo_tenancy`.
 
 ### Calidad
-- **15 tests** en el plugin ITSM (en verde). Migraciones generadas por Django (no a mano).
+- **284 tests en verde** + ruff limpio en los 3 plugins. Cobertura completa al estándar NetBox `add-model`:
+  - ITSM: `test_models.py` (lógica/validaciones/gating) · `test_api.py` (REST CRUD/bulk/brief/**GraphQL** de los 10 modelos, con baseline de conteo de queries) · `test_filtersets.py` (filtros choice/FK/búsqueda).
+  - Topología: `test_graph.py` (build_graph, path-trace, SPOF, what-if, VLAN, híbrido, anillos de incidente).
+- GraphQL reestructurado al paquete estándar `graphql/{types,filters,schema}.py` (resolución de tipos/filtros por convención NetBox).
+- Migraciones generadas por Django (no a mano).
 
 ---
 
