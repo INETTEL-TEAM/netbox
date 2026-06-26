@@ -57,8 +57,12 @@ ya hace bien y añadiendo **3 plugins propios** para lo que le falta. Resultado:
 ### Pilar 3 — Exploración visual
 - **Rack-elevation 2D nativa**: racks con sus equipos colocados (vista de armario).
 - **Grafo de topología interactivo** (Cytoscape) derivado del cableado real de NetBox **sin Neo4j**:
-  - **Path-trace** (ruta más corta A→B), **SPOF** (puntos únicos de fallo), **what-if** (simular caídas),
-    **vista por VLAN**, y **anillos de incidente** sobre los nodos.
+  - **Path-trace** (ruta más corta A→B + **cuello de botella** del camino), **SPOF**, **what-if**,
+    **vista por VLAN/híbrida**, y **anillos de incidente** sobre los nodos.
+  - **Capacidad y redundancia** (con datos reales de NetBox): cada enlace muestra su **nº de cables**
+    (grosor) y **capacidad agregada** (Σ speed); el SPOF distingue **enlace crítico (1 cable)** de
+    **enlace redundante seguro (≥2 cables)**; el what-if acepta **caída de equipos y/o enlaces** y
+    reporta la **capacidad perdida** (Gbps). *(El % de tráfico real queda para la fase Grafana.)*
 - **Cable-trace** nativo de NetBox sobre los enlaces.
 
 ### Pilar 4 — Flexibilidad del modelo
@@ -97,7 +101,7 @@ mantenimientos en Device/Site; postmortems en Incident), con botón "crear" pre-
 - **630 tests en verde** + ruff limpio en los **3 plugins** (todos con tests). Cobertura completa al estándar NetBox `add-model` (los 4 tipos de test):
   - ITSM: `test_models.py` (lógica/validaciones/gating) · `test_api.py` (REST CRUD/bulk/brief/**GraphQL** de los 10 modelos, con baseline de queries) · `test_filtersets.py` (mixin estándar `ChangeLoggedFilterSetTests`: **`test_missing_filters` exige un filtro por cada campo del modelo** + id/created/last_updated, más asserts de choice/FK/búsqueda) · `test_views.py` (UI: get/detail/changelog/create/edit/delete/list/bulk import-edit-delete).
   - Filtersets **exhaustivos**: todos los campos filtrables (escalares + FKs `*_id`, incluido `device_role_id` como `TreeNodeMultipleChoiceFilter`).
-  - Topología: `test_graph.py` (build_graph, path-trace, SPOF, what-if, VLAN, híbrido, anillos de incidente).
+  - Topología: `test_graph.py` (build_graph, path-trace + cuello de botella, SPOF redundancia-aware, what-if de equipos/enlaces, capacidad por enlace, VLAN, híbrido, anillos de incidente).
   - Geo: `test_views.py` (dashboard, mapa, endpoint drill-down con agregación de subtree, breadcrumb, salud por incidentes y scoping por permisos).
 - **Auditoría end-to-end ejecutada**: 90 flujos reales verificados vía HTTP con datos de demo (UI list/add/import/detail + API + GraphQL de los 10 modelos ITSM, geo dashboard/map/data, topología graph/vlan/hybrid/spof/whatif, las pestañas en Device/Site/Incident/Schedule y todos los enlaces de menú) → **0 fallos**. Sin migraciones pendientes; `manage.py check` OK.
 - GraphQL reestructurado al paquete estándar `graphql/{types,filters,schema}.py` (resolución de tipos/filtros por convención NetBox).
