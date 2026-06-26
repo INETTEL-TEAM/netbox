@@ -255,7 +255,7 @@ Syslog (Loki/LogQL), métricas (Prometheus/Mimir/Grafana — ya en su stack), CV
 - [x] **On-call / escalado** (v0.7): `OnCallSchedule` (rotación, tenant, enabled) + `OnCallShift` (FK schedule, assignee, level primary/secondary/escalation, ventana start/end con `clean()`). Superficie completa ×2 + REST API + **GraphQL** + search + nav + **pestaña Schedule→Shifts**. Migración 0007. Tests totales: **24 OK**, ruff limpio. Verificado UI/API/GraphQL/tab. **→ Modelos ITSM del plan: COMPLETOS (8 modelos).**
 - [ ] Scripts: Custom Scripts + JobRunner; gating `requires_rfc`.
 - [ ] CVE/compliance como modelos de plugin; feeds externos.
-- [ ] Event Rules + Webhooks hacia PagerDuty/Slack/Grafana.
+- [x] **Event Rules + Webhooks** (v0.8): comando `inettel_seed_eventrules` (idempotente, `--url` configurable) crea un Webhook `inettel-alerts` + 2 Event Rules nativas de NetBox: `inettel-incident-alerts` (Incident create/update con severity∈P1/P2) y `inettel-change-emergency` (ChangeRequest type=emergency). Verificado: object_types/action_object/event_types correctos y `eval_conditions` (P1→sí, P3→no; emergency→sí, normal→no). Listo para apuntar a PagerDuty/Slack/Grafana.
 
 > Notas de entorno (Fase 3): el rol Postgres `netbox` recibió `CREATEDB` (necesario para tests). Los plugins se añadieron también a `configuration_testing.py` (`PLUGINS`). La config principal incluye además `netbox_inettel_engine` (trabajo en paralelo, no cubierto por este plan).
 
